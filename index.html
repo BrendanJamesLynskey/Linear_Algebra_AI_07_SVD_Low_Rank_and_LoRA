@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Linear Algebra for AI 07 &mdash; SVD, Low-Rank &amp; LoRA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]})"></script>
+    <style>
+        :root { --bg-primary: #0a0a0a; --bg-card: #0d1117; --bg-code: #161b22; --text-primary: #e6edf3; --text-secondary: #8b949e; --accent: #a78bfa; --accent-dim: #a78bfa44; --accent-glow: #a78bfa33; --accent-2: #f472b6; --accent-3: #fbbf24; --accent-4: #34d399; --border: #21262d; --font-display: 'Space Grotesk', sans-serif; --font-mono: 'JetBrains Mono', 'Fira Code', monospace; --font-body: 'Inter', sans-serif; --max-width: 900px; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font-body); font-size: 17px; line-height: 1.7; overflow-x: hidden; }
+        .hero { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 2rem 1.5rem; text-align: center; position: relative; }
+        .hero::before { content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 700px; height: 600px; background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%); pointer-events: none; z-index: 0; }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label { font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 1rem; }
+        .hero h1 { font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; color: var(--text-primary); line-height: 1.2; margin-bottom: 1rem; }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle { font-size: 1.1rem; color: var(--text-secondary); max-width: 640px; margin-bottom: 2rem; }
+        .tags { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-bottom: 2.5rem; }
+        .tag { font-family: var(--font-mono); font-size: 0.75rem; padding: 0.25rem 0.75rem; border-radius: 999px; border: 1px solid var(--accent); color: var(--accent); background: var(--accent-dim); white-space: nowrap; }
+        .pipeline { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0.25rem; margin-bottom: 1rem; max-width: var(--max-width); }
+        .pipeline-step { font-family: var(--font-mono); font-size: 0.7rem; padding: 0.3rem 0.7rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; color: var(--text-secondary); white-space: nowrap; }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide { min-height: 100vh; max-width: var(--max-width); margin: 0 auto; padding: 4rem 1.5rem; position: relative; display: flex; flex-direction: column; justify-content: center; }
+        .slide-number { font-family: var(--font-display); font-size: 5rem; font-weight: 700; color: var(--accent-dim); position: absolute; top: 2rem; right: 1.5rem; line-height: 1; user-select: none; }
+        .slide h2 { font-family: var(--font-display); font-size: 1.9rem; font-weight: 700; color: var(--accent); margin-bottom: 1.5rem; line-height: 1.25; }
+        .slide h3 { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; color: var(--text-primary); margin-top: 1.5rem; margin-bottom: 0.75rem; }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem; color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code { background: var(--bg-code); padding: 0.1rem 0.35rem; border-radius: 3px; font-family: var(--font-mono); font-size: 0.85em; color: var(--accent); }
+        .table-wrap { overflow-x: auto; margin: 1.25rem 0; border-radius: 8px; border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background: var(--bg-code); color: var(--accent); font-weight: 600; text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-family: var(--font-display); white-space: nowrap; }
+        td { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-secondary); vertical-align: top; }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-grid { display: grid; gap: 0.75rem; margin: 1.5rem 0; padding: 1.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel { padding: 1rem; background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px; }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel.r { border-left: 3px solid var(--accent-2); }
+        .diagram-panel.y { border-left: 3px solid var(--accent-3); }
+        .diagram-panel.g { border-left: 3px solid var(--accent-4); }
+        .diagram-panel h4 { font-family: var(--font-display); font-size: 1rem; color: var(--accent); margin-bottom: 0.5rem; }
+        .diagram-panel.r h4 { color: var(--accent-2); } .diagram-panel.y h4 { color: var(--accent-3); } .diagram-panel.g h4 { color: var(--accent-4); }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.9rem; }
+        .callout { background: var(--bg-card); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 1.25rem 0; }
+        .callout p { margin-bottom: 0; }
+        .callout .callout-label { font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.3rem; }
+        .canvas-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin: 1.25rem 0; overflow-x: auto; }
+        .canvas-wrap canvas, .canvas-wrap svg { display: block; margin: 0 auto; max-width: 100%; }
+        .control-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin: 1.25rem 0; }
+        .control-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .control-row label { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-secondary); min-width: 130px; }
+        .control-row input[type="range"] { flex: 1; min-width: 150px; accent-color: var(--accent); }
+        .control-row .val { font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); min-width: 80px; text-align: right; }
+        .btn { font-family: var(--font-mono); font-size: 0.8rem; padding: 0.4rem 0.9rem; background: var(--accent-dim); color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; cursor: pointer; transition: background 0.15s ease; }
+        .btn:hover { background: rgba(167,139,250,0.25); }
+        .btn.secondary { background: var(--bg-code); color: var(--text-secondary); border-color: var(--border); }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.5rem; margin-top: 0.75rem; }
+        .metric { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px; padding: 0.6rem 0.8rem; text-align: center; }
+        .metric .metric-label { font-family: var(--font-mono); font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.08em; }
+        .metric .metric-value { font-family: var(--font-display); font-size: 1.25rem; color: var(--accent); font-weight: 600; margin-top: 0.2rem; }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li { counter-increment: contents; padding: 0.6rem 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before { content: counter(contents, decimal-leading-zero); font-family: var(--font-mono); font-size: 0.85rem; color: var(--accent); min-width: 2rem; }
+        .contents-list a { color: var(--text-primary); text-decoration: none; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer { text-align: center; padding: 3rem 1.5rem; color: var(--text-secondary); font-size: 0.85rem; border-top: 1px solid var(--border); max-width: var(--max-width); margin: 0 auto; }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .katex { color: var(--text-primary); } .katex-display { margin: 1rem 0; overflow-x: auto; overflow-y: hidden; }
+        @media (max-width: 640px) { .slide { padding: 3rem 1rem; min-height: auto; } .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; } .slide h2 { font-size: 1.5rem; } .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; } .hero h1 { font-size: 1.8rem; } table { font-size: 0.78rem; } }
+    </style>
+</head>
+<body>
+
+<header class="hero">
+    <div class="series-label">Linear Algebra for AI &mdash; Presentation 07</div>
+    <h1>SVD, Low-Rank &amp; <span class="accent">LoRA</span></h1>
+    <p class="subtitle">The Singular Value Decomposition is the most useful theorem in applied linear algebra. It gives the best low-rank approximation of any matrix &mdash; the foundation of LoRA, MLA, low-rank KV-cache compression, and almost every "just project to a smaller space" trick in modern ML.</p>
+
+    <div class="tags">
+        <span class="tag">SVD</span><span class="tag">truncated SVD</span>
+        <span class="tag">Eckart-Young</span><span class="tag">LoRA</span>
+        <span class="tag">DoRA</span><span class="tag">MLA</span>
+    </div>
+
+    <div class="pipeline">
+        <span class="pipeline-step">A = UΣV<sup>⊤</sup></span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">truncate to top k</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">best rank-k approx</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">LoRA / DoRA / MLA</span>
+    </div>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We'll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">The Theorem &amp; the Three Matrices</a></li>
+        <li><a href="#slide-02">Geometric Reading: Rotate, Scale, Rotate</a></li>
+        <li><a href="#slide-03">Relation to Eigendecomposition</a></li>
+        <li><a href="#slide-04">Truncated SVD &amp; the Eckart-Young Theorem</a></li>
+        <li><a href="#slide-05">Effective Rank &amp; the Singular-Value Spectrum</a></li>
+        <li><a href="#slide-06">LoRA &mdash; Fine-Tuning as a Rank Constraint</a></li>
+        <li><a href="#slide-07">DoRA, VeRA &amp; LoRA's Cousins</a></li>
+        <li><a href="#slide-08">DeepSeek MLA &mdash; Low-Rank KV Cache</a></li>
+        <li><a href="#slide-09">Interactive: Image Rank Slider</a></li>
+        <li><a href="#slide-10">The Pseudoinverse via SVD</a></li>
+        <li><a href="#slide-11">Cheat Sheet</a></li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>The Theorem &amp; the Three Matrices</h2>
+    <p><strong>The SVD theorem.</strong> Every matrix $A \in \mathbb{R}^{m\times n}$ &mdash; any shape, any rank &mdash; can be factorised as</p>
+    <p>$$A = U\Sigma V^\top,$$</p>
+    <p>where $U \in \mathbb{R}^{m\times m}$ is orthogonal ($U^\top U = I$), $V \in \mathbb{R}^{n\times n}$ is orthogonal ($V^\top V = I$), and $\Sigma \in \mathbb{R}^{m\times n}$ is "diagonal" &mdash; non-negative entries $\sigma_1 \ge \sigma_2 \ge \cdots \ge 0$ on the main diagonal, zeros elsewhere.</p>
+
+    <p>The columns of $U$ are <strong>left singular vectors</strong>, the columns of $V$ are <strong>right singular vectors</strong>, and the $\sigma_i$ are <strong>singular values</strong>. The number of non-zero singular values equals $\mathrm{rank}\,A$.</p>
+
+    <h3>Compact (thin) SVD</h3>
+    <p>If $\mathrm{rank}\,A = r$, store only the first $r$ columns of $U$ and $V$ and the $r\times r$ leading block of $\Sigma$:</p>
+    <p>$$A = U_r \Sigma_r V_r^\top = \sum_{i=1}^r \sigma_i\, \mathbf{u}_i \mathbf{v}_i^\top.$$</p>
+    <p>The sum on the right is the rank-1-decomposition view: $A$ is a weighted sum of $r$ rank-1 outer products, each weighted by its singular value. Often more useful than the full thing.</p>
+
+    <div class="callout">
+        <div class="callout-label">Why "every matrix"?</div>
+        <p>Eigendecomposition exists only for some matrices (must be square, must be diagonalisable). SVD exists for <em>all</em> matrices &mdash; rectangular, rank-deficient, even all-zero. This generality is why SVD is the workhorse: when you don't know what shape your matrix is, write SVD.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>Geometric Reading: Rotate, Scale, Rotate</h2>
+    <p>Multiplication by $A$ does three things in sequence:</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>1. $V^\top$ &mdash; rotate</h4>
+            <p>Rewrite the input vector in the orthonormal "right singular" basis. No stretching; just a rotation/reflection of axes.</p>
+        </div>
+        <div class="diagram-panel y">
+            <h4>2. $\Sigma$ &mdash; scale</h4>
+            <p>Stretch each axis by its singular value. The $i$-th coordinate is multiplied by $\sigma_i$. Coordinates beyond rank are discarded (multiplied by 0).</p>
+        </div>
+        <div class="diagram-panel g">
+            <h4>3. $U$ &mdash; rotate</h4>
+            <p>Rewrite the result in the standard basis of the output space. Again pure rotation/reflection.</p>
+        </div>
+    </div>
+
+    <p>Every linear map is, in the right pair of orthonormal bases, just a per-axis scaling. The two rotations are precisely the change-of-basis from "ordinary" to "principal" axes &mdash; on the input side and on the output side independently.</p>
+
+    <h3>What this means for the unit ball</h3>
+    <p>$A$ takes the unit sphere $\{\mathbf{x} : \|\mathbf{x}\| = 1\}$ to an ellipsoid (or a degenerate flatter object if rank-deficient). The semi-axes of the ellipsoid are the singular values, and their directions are $U$. The largest singular value $\sigma_1$ is the maximum stretch any input direction can experience &mdash; the <strong>spectral norm</strong> $\|A\|_2 = \sigma_1$. The smallest non-zero singular value is the minimum stretch on the row space.</p>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>Relation to Eigendecomposition</h2>
+    <p>For any $A$, the matrix $A^\top A$ is symmetric and PSD. Apply the spectral theorem (deck 06):</p>
+    <p>$$A^\top A = V \Sigma^\top \Sigma V^\top.$$</p>
+    <p>So <strong>the right singular vectors $V$ are the eigenvectors of $A^\top A$, and the singular values are the square roots of its eigenvalues</strong>.</p>
+
+    <p>Similarly $A A^\top = U \Sigma \Sigma^\top U^\top$ &mdash; left singular vectors are eigenvectors of $A A^\top$.</p>
+
+    <h3>What this gives in practice</h3>
+    <ul>
+        <li><strong>Computing SVD.</strong> Form $A^\top A$ (or $A A^\top$), find its eigendecomp, take square roots. Slow and numerically not the way real libraries do it &mdash; LAPACK uses bidiagonalisation + QR &mdash; but the connection is exact.</li>
+        <li><strong>SVD of a covariance gives PCA.</strong> If $X$ is centred, $\mathrm{Cov}(X) \propto X^\top X$. So PCA = right singular vectors of the centred data matrix. This is what <code>sklearn.decomposition.PCA</code> actually computes (via SVD, not eigendecomp of covariance).</li>
+        <li><strong>Symmetric SVD = signed eigendecomp.</strong> If $A$ is symmetric with eigenvalues $\lambda_i$, then singular values are $|\lambda_i|$ and the SVD differs from eigendecomp by sign flips on the eigenvectors of negative eigenvalues.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Truncated SVD &amp; the Eckart-Young Theorem</h2>
+    <p>The most-cited theorem in applied linear algebra:</p>
+
+    <div class="callout">
+        <div class="callout-label">Eckart-Young-Mirsky (1936/1960)</div>
+        <p>Among all matrices of rank at most $k$, the closest one to $A$ in either Frobenius or spectral norm is the <strong>truncated SVD</strong>: keep only the $k$ largest singular values.</p>
+        <p>$$A_k = \sum_{i=1}^k \sigma_i\, \mathbf{u}_i \mathbf{v}_i^\top, \qquad \|A - A_k\|_F^2 = \sum_{i=k+1}^r \sigma_i^2, \quad \|A - A_k\|_2 = \sigma_{k+1}.$$</p>
+    </div>
+
+    <p>This is the most general statement of "the best $k$-dimensional summary": <em>truncate</em>. The error is exactly the trailing singular values &mdash; nothing else.</p>
+
+    <h3>Why this is the foundation of modern ML compression</h3>
+    <ul>
+        <li><strong>PCA</strong> is truncated SVD on centred data. The "best $k$-dim subspace" interpretation is Eckart-Young.</li>
+        <li><strong>LoRA</strong> approximates the fine-tune update $\Delta W$ by a rank-$r$ matrix. Eckart-Young says <em>if</em> $\Delta W$ has fast-decaying singular values, this throws away little.</li>
+        <li><strong>Image compression / classical autoencoders</strong> are SVD truncation in disguise.</li>
+        <li><strong>JPEG's DCT</strong> isn't SVD but exploits the same low-effective-rank structure of natural images.</li>
+        <li><strong>Random sketches / Johnson-Lindenstrauss</strong> give a coarser version of low-rank approximation that doesn't require eigenstructure.</li>
+    </ul>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Effective Rank &amp; the Singular-Value Spectrum</h2>
+    <p>A matrix's <em>nominal</em> rank is the count of non-zero singular values. Its <em>effective</em> rank is, informally, "how many singular values are big enough to matter".</p>
+
+    <p>Formal versions:</p>
+    <ul>
+        <li><strong>Stable rank:</strong> $\|A\|_F^2 / \|A\|_2^2 = \sum_i \sigma_i^2 / \sigma_1^2$. Robust to noise.</li>
+        <li><strong>$\varepsilon$-rank:</strong> the smallest $k$ such that $\sum_{i &gt; k} \sigma_i^2 \le \varepsilon^2 \|A\|_F^2$. The number of components needed to explain $1 - \varepsilon^2$ of the energy.</li>
+    </ul>
+
+    <h3>What real ML matrices look like</h3>
+    <ul>
+        <li><strong>Pre-trained transformer weights</strong> are mostly full rank but have <em>fast-decaying singular value spectra</em>. The first 100 singular values typically capture much more than 100/$d$ of the Frobenius norm. (Hu et al. 2021, the LoRA paper, shows this empirically for GPT-3.)</li>
+        <li><strong>Fine-tuning <em>updates</em></strong> $\Delta W = W_{\text{ft}} - W_{\text{pre}}$ are very low-effective-rank &mdash; usually an effective rank of 8-32, even for $d \in [4096, 16384]$. This is the empirical observation that justifies LoRA.</li>
+        <li><strong>Activation matrices</strong> at intermediate layers are also low-effective-rank, especially after softmax (Bhojanapalli et al. 2020, "Low-rank bottleneck in multi-head attention").</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">The lottery-ticket / low-rank coincidence</div>
+        <p>The "lottery ticket hypothesis" (Frankle &amp; Carbin 2019), the success of LoRA, and the success of weight-sharing tricks like cross-attention KV reuse are all variations on a single empirical fact: <em>trained transformers have far less degrees-of-freedom than their parameter count suggests</em>. Linear-algebraically, that's a low effective rank.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>LoRA &mdash; Fine-Tuning as a Rank Constraint</h2>
+    <p><strong>LoRA</strong> (Hu et al., ICLR 2022) is the dominant parameter-efficient fine-tuning technique. Idea: freeze the pre-trained $W \in \mathbb{R}^{d_{out} \times d_{in}}$, add a low-rank trainable update.</p>
+
+    <p>$$W_{\text{ft}} = W + \Delta W, \qquad \Delta W = B A,\quad A \in \mathbb{R}^{r \times d_{in}},\ B \in \mathbb{R}^{d_{out} \times r}.$$</p>
+
+    <p>$\Delta W$ has rank $\le r$. Initialise $B = 0$, $A$ random Gaussian, so $\Delta W = 0$ at start. Train only $A$ and $B$.</p>
+
+    <h3>The numbers</h3>
+    <ul>
+        <li><strong>Param count.</strong> $r(d_{in} + d_{out})$ instead of $d_{in} d_{out}$. For $d_{in} = d_{out} = 4096$ and $r = 16$: 131,072 vs 16,777,216 &mdash; a 128&times; reduction.</li>
+        <li><strong>Memory savings.</strong> No gradients, no optimiser state, no activations stored for the frozen $W$. Adam's optimiser state is 2&times; the trainable params; LoRA cuts that 128&times; too.</li>
+        <li><strong>Inference cost.</strong> Either keep $A, B$ separate (small extra matmul per layer) or merge once: $W' = W + BA$ at deployment. Merged LoRA has zero inference overhead.</li>
+    </ul>
+
+    <h3>Why does it work?</h3>
+    <p>Empirically, the rank of $\Delta W$ in full fine-tuning is very low &mdash; often $\le 32$. So the rank constraint loses very little. Aghajanyan et al. (2020) made this precise with their "intrinsic dimension" experiments before LoRA itself was published; LoRA generalised the observation into a clean parameterisation.</p>
+
+    <div class="callout">
+        <div class="callout-label">The scale factor $\alpha/r$</div>
+        <p>LoRA in practice is parameterised as $\Delta W = (\alpha/r)\, B A$, with a hyperparameter $\alpha$ &mdash; typically equal to $r$ (so the scale is 1) or $2r$. The $\alpha/r$ factor decouples the choice of rank from the effective learning rate; doubling $r$ doesn't change the effective scale of updates. A small but mattering detail.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>DoRA, VeRA &amp; LoRA's Cousins</h2>
+    <p>The LoRA family has spawned a small zoo of refinements, each addressing a specific limitation.</p>
+
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Method</th><th>Idea</th><th>What it adds</th></tr></thead>
+            <tbody>
+                <tr><td><strong>QLoRA</strong> (Dettmers 2023)</td><td>4-bit-quantise the frozen $W$; LoRA in fp16 on top.</td><td>Trains 65B-param models on a single 48 GB GPU. Now standard for hobbyist fine-tuning.</td></tr>
+                <tr><td><strong>DoRA</strong> (Liu 2024)</td><td>Decompose $W = m \cdot \frac{V}{\|V\|}$ into magnitude $m$ and direction $\frac{V}{\|V\|}$. LoRA on the direction; full-rank update on $m$.</td><td>Closes most of the gap to full FT at the same param budget. The mag/dir split mirrors weight normalisation.</td></tr>
+                <tr><td><strong>VeRA</strong> (Kopiczko 2024)</td><td>Share random projections $A_{\text{shared}}, B_{\text{shared}}$ across all layers; learn only per-layer scaling vectors $\mathbf{b}, \mathbf{d}$.</td><td>Even fewer trainable params (~10&times; fewer than LoRA) at minor accuracy cost.</td></tr>
+                <tr><td><strong>LoRA+ </strong>(Hayou 2024)</td><td>Different learning rates for $A$ and $B$ to balance their gradient scales.</td><td>Better convergence at the same FLOPs.</td></tr>
+                <tr><td><strong>PiSSA</strong> (Meng 2024)</td><td>Initialise $A, B$ from the top-$r$ SVD components of $W$. Learn the residual.</td><td>Better starting point; faster convergence than zero-init LoRA.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <p>All of them sit on the same linear-algebraic substrate: a rank-$r$ correction on top of a frozen full-rank pre-trained map. The differences are about <em>how to budget the rank</em> and <em>where to put it</em>.</p>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>DeepSeek MLA &mdash; Low-Rank KV Cache</h2>
+    <p><strong>Multi-head Latent Attention</strong> (DeepSeek-V2/V3, 2024) attacks a different problem: the KV cache that grows with sequence length. By pushing low-rank structure into <em>activations</em> rather than weights, MLA cuts the KV-cache footprint by an order of magnitude with negligible quality loss.</p>
+
+    <h3>The standard KV cache</h3>
+    <p>For a sequence of $L$ tokens, multi-head attention caches the keys and values at every layer:</p>
+    <p>$$\text{cache size per layer} = 2 \cdot L \cdot H \cdot d_h = 2L\, d_{model} \text{ floats}.$$</p>
+    <p>For Llama-2 70B at $d_{model} = 8192$, $L = 32k$, that's 0.5 GB <em>per layer</em>, 40 GB total &mdash; in fp16 &mdash; just for the cache.</p>
+
+    <h3>MLA's substitution</h3>
+    <p>Instead of caching full $\mathbf{k}_i, \mathbf{v}_i$ vectors per token, cache a compressed latent</p>
+    <p>$$\mathbf{c}_i = W^{KV}_{\text{down}} \mathbf{h}_i \in \mathbb{R}^{r}$$</p>
+    <p>with $r \ll d_{model}$ (DeepSeek-V2 uses $r = 512$ vs $d_{model} = 5120$). At inference, recompute keys and values on demand:</p>
+    <p>$$\mathbf{k}_i = W^K_{\text{up}} \mathbf{c}_i, \quad \mathbf{v}_i = W^V_{\text{up}} \mathbf{c}_i.$$</p>
+
+    <p>Cache size is now $L \cdot r$ instead of $2L\, d_{model}$ &mdash; a factor of $\sim 20\times$ reduction. The KV up-projections happen at attention time, not at cache-write time, but they're cheap because they batch over the same latent vector that lives in the cache. RoPE is applied to the keys after the up-projection to maintain positional encoding.</p>
+
+    <div class="callout">
+        <div class="callout-label">Why this is fundamentally a rank trick</div>
+        <p>MLA assumes the keys (and values) for a given sequence position can be parameterised by a low-dimensional latent $\mathbf{c}$. This is exactly the rank-$r$ approximation argument applied to the joint $(\mathbf{k}, \mathbf{v})$ stack across heads. The <em>weight</em> matrices stay full rank; only the per-token <em>activation</em> is constrained. Same Eckart-Young idea, applied to a different object.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>Interactive: Image Rank Slider</h2>
+    <p>Pick a procedurally-generated image, then truncate its SVD to rank $k$. The image is recomposed as $A_k = \sum_{i=1}^k \sigma_i \mathbf{u}_i \mathbf{v}_i^\top$. As $k$ grows you see the picture sharpen: the first few components capture the broad structure, later ones add detail and texture, and the smallest add noise.</p>
+
+    <div class="control-panel">
+        <div class="control-row">
+            <label>Image</label>
+            <select id="svd-img">
+                <option value="checker">Checkerboard</option>
+                <option value="text" selected>Text-like</option>
+                <option value="gradient">Gradient + circle</option>
+                <option value="random">Random low-rank</option>
+            </select>
+        </div>
+        <div class="control-row">
+            <label>Rank k</label>
+            <input type="range" id="svd-k" min="1" max="32" step="1" value="8">
+            <span class="val" id="svd-kv">8</span>
+        </div>
+    </div>
+
+    <div class="canvas-wrap">
+        <canvas id="svd-canvas" width="640" height="220"></canvas>
+    </div>
+
+    <div class="metric-grid">
+        <div class="metric"><div class="metric-label">image size</div><div class="metric-value" id="svd-sz">32×32</div></div>
+        <div class="metric"><div class="metric-label">k</div><div class="metric-value" id="svd-kk">8</div></div>
+        <div class="metric"><div class="metric-label">params (full)</div><div class="metric-value" id="svd-pf">1024</div></div>
+        <div class="metric"><div class="metric-label">params (rank-k)</div><div class="metric-value" id="svd-pk">520</div></div>
+        <div class="metric"><div class="metric-label">Frob error</div><div class="metric-value" id="svd-err">0.20</div></div>
+    </div>
+
+    <script>
+    (function(){
+        var N = 32;
+        var img = null;
+        var k = 8;
+        var imgKind = 'text';
+
+        function makeImage(kind) {
+            var A = [];
+            for (var i = 0; i < N; i++) { A.push([]); for (var j = 0; j < N; j++) A[i].push(0); }
+            if (kind === 'checker') {
+                for (var i = 0; i < N; i++) for (var j = 0; j < N; j++)
+                    A[i][j] = ((Math.floor(i/4)+Math.floor(j/4)) % 2 === 0) ? 0.85 : 0.15;
+            } else if (kind === 'text') {
+                // Build "AI" letters with horizontal/vertical strokes + accents
+                for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) A[i][j] = 0.1;
+                // 'A' on left
+                for (var i = 6; i < 26; i++) {
+                    A[i][6 + Math.floor((i-6)/4)] = 0.95;
+                    A[i][13 - Math.floor((i-6)/4)] = 0.95;
+                }
+                for (var j = 8; j < 12; j++) A[16][j] = 0.95;
+                // 'I' on right
+                for (var j = 18; j < 26; j++) { A[6][j] = 0.95; A[26][j] = 0.95; }
+                for (var i = 6; i < 27; i++) A[i][22] = 0.95;
+            } else if (kind === 'gradient') {
+                for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) {
+                    var g = (i + j) / (2*N);
+                    var d = Math.hypot(i - N/2, j - N/2);
+                    A[i][j] = 0.2 + 0.6*g + (d < 8 ? 0.4 : 0);
+                }
+            } else if (kind === 'random') {
+                // pure rank-4 + tiny noise
+                for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) {
+                    var v = 0;
+                    for (var r = 0; r < 4; r++) v += Math.cos((r+1)*i*0.3)*Math.sin((r+1)*j*0.3);
+                    A[i][j] = 0.5 + 0.1*v + 0.02*(Math.random()-0.5);
+                }
+            }
+            return A;
+        }
+        function transpose(A){ var T = []; for (var j = 0; j < A[0].length; j++) { T.push([]); for (var i = 0; i < A.length; i++) T[j].push(A[i][j]); } return T; }
+        function matmul(A, B){
+            var m = A.length, n = B[0].length, k = B.length;
+            var C = [];
+            for (var i = 0; i < m; i++) { C.push([]); for (var j = 0; j < n; j++) { var s = 0; for (var l = 0; l < k; l++) s += A[i][l]*B[l][j]; C[i].push(s); } }
+            return C;
+        }
+        // Power iteration to find top singular triplets
+        function topSV(A, kk) {
+            var n = A.length, m = A[0].length;
+            var At = transpose(A);
+            var AtA = matmul(At, A); // m x m
+            var Atemp = []; for (var i = 0; i < m; i++) { Atemp.push([]); for (var j = 0; j < m; j++) Atemp[i].push(AtA[i][j]); }
+            var us = [], vs = [], sigs = [];
+            for (var t = 0; t < kk; t++) {
+                var v = []; for (var i = 0; i < m; i++) v.push(Math.random()-0.5);
+                for (var it = 0; it < 60; it++) {
+                    var w = []; for (var i = 0; i < m; i++) { var s = 0; for (var j = 0; j < m; j++) s += Atemp[i][j]*v[j]; w.push(s); }
+                    var nrm = Math.sqrt(w.reduce(function(a,b){return a+b*b;}, 0)); if (nrm < 1e-12) nrm = 1e-12;
+                    for (var i = 0; i < m; i++) v[i] = w[i]/nrm;
+                }
+                // sigma^2 = v^T AtA v
+                var lam = 0; for (var i = 0; i < m; i++) { var s = 0; for (var j = 0; j < m; j++) s += Atemp[i][j]*v[j]; lam += v[i]*s; }
+                var sigma = Math.sqrt(Math.max(0, lam));
+                // u = A v / sigma
+                var u = []; for (var i = 0; i < n; i++) { var s = 0; for (var j = 0; j < m; j++) s += A[i][j]*v[j]; u.push(sigma > 1e-9 ? s/sigma : 0); }
+                us.push(u); vs.push(v); sigs.push(sigma);
+                // deflate AtA <- AtA - sigma^2 v v^T
+                for (var i = 0; i < m; i++) for (var j = 0; j < m; j++) Atemp[i][j] -= lam*v[i]*v[j];
+            }
+            return {U: us, V: vs, S: sigs};
+        }
+        var cached = null;
+        function rebuild(svd, k) {
+            var n = svd.U[0].length, m = svd.V[0].length;
+            var A = []; for (var i = 0; i < n; i++) { A.push([]); for (var j = 0; j < m; j++) A[i].push(0); }
+            for (var t = 0; t < k; t++) {
+                for (var i = 0; i < n; i++) for (var j = 0; j < m; j++) A[i][j] += svd.S[t]*svd.U[t][i]*svd.V[t][j];
+            }
+            return A;
+        }
+        function frobErr(A, B) {
+            var s = 0; for (var i = 0; i < A.length; i++) for (var j = 0; j < A[0].length; j++) s += (A[i][j]-B[i][j])*(A[i][j]-B[i][j]);
+            return Math.sqrt(s);
+        }
+        function frobNorm(A) {
+            var s = 0; for (var i = 0; i < A.length; i++) for (var j = 0; j < A[0].length; j++) s += A[i][j]*A[i][j];
+            return Math.sqrt(s);
+        }
+        function draw() {
+            var canvas = document.getElementById('svd-canvas');
+            var ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Original on left, reconstructed on right; bar chart of singular values in middle
+            var cell = 6;
+            var ox1 = 30, oy1 = 30;
+            var ox2 = 410, oy2 = 30;
+            // Draw original
+            for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) {
+                var v = Math.max(0, Math.min(1, img[i][j]));
+                ctx.fillStyle = 'rgb('+Math.floor(220*v)+','+Math.floor(190*v + 30)+','+Math.floor(255*v)+')';
+                ctx.fillRect(ox1 + j*cell, oy1 + i*cell, cell-1, cell-1);
+            }
+            ctx.fillStyle = '#a78bfa'; ctx.font = '13px "JetBrains Mono"'; ctx.fillText('original', ox1+50, oy1+N*cell+20);
+            // Reconstruction
+            var Ak = rebuild(cached, k);
+            for (var i = 0; i < N; i++) for (var j = 0; j < N; j++) {
+                var v = Math.max(0, Math.min(1, Ak[i][j]));
+                ctx.fillStyle = 'rgb('+Math.floor(220*v)+','+Math.floor(190*v + 30)+','+Math.floor(255*v)+')';
+                ctx.fillRect(ox2 + j*cell, oy2 + i*cell, cell-1, cell-1);
+            }
+            ctx.fillStyle = '#a78bfa'; ctx.fillText('rank-'+k+' approx', ox2+30, oy2+N*cell+20);
+            // Singular values bar chart in middle
+            var bx = 240, by = 30, bw = 150, bh = 180;
+            ctx.strokeStyle = '#21262d'; ctx.strokeRect(bx, by, bw, bh);
+            ctx.fillStyle = '#8b949e'; ctx.font = '11px "JetBrains Mono"'; ctx.fillText('σᵢ', bx+5, by-4);
+            var smax = cached.S[0]; var Nshow = Math.min(32, cached.S.length);
+            var w = bw / Nshow;
+            for (var t = 0; t < Nshow; t++) {
+                var h = (cached.S[t]/(smax||1)) * (bh - 6);
+                ctx.fillStyle = (t < k) ? '#a78bfa' : '#3a3a3a';
+                ctx.fillRect(bx + t*w + 1, by + bh - h - 2, w - 1, h);
+            }
+            // metrics
+            document.getElementById('svd-sz').textContent = N+'×'+N;
+            document.getElementById('svd-kk').textContent = k;
+            document.getElementById('svd-pf').textContent = N*N;
+            document.getElementById('svd-pk').textContent = k*(2*N);
+            var err = frobErr(img, Ak) / (frobNorm(img) || 1);
+            document.getElementById('svd-err').textContent = err.toFixed(2);
+        }
+        function refresh() {
+            img = makeImage(imgKind);
+            cached = topSV(img, 32);
+            draw();
+        }
+        document.getElementById('svd-img').addEventListener('change', function(){ imgKind = this.value; refresh(); });
+        document.getElementById('svd-k').addEventListener('input', function(){ k = parseInt(this.value); document.getElementById('svd-kv').textContent = k; draw(); });
+        refresh();
+    })();
+    </script>
+
+    <p style="margin-top:1rem; font-size: 0.95rem;">The middle bar chart shows the singular values $\sigma_1 \ge \sigma_2 \ge \cdots$. Violet bars are kept; grey bars are truncated. Notice that for the "Random low-rank" image the spectrum drops sharply to noise after a few components &mdash; rank-4 is essentially perfect. For the gradient/text images the decay is more gradual; you'd need more components to recover sharp edges.</p>
+</section>
+
+<section class="slide" id="slide-10">
+    <div class="slide-number">10</div>
+    <h2>The Pseudoinverse via SVD</h2>
+    <p>For $A = U\Sigma V^\top$, the <strong>Moore-Penrose pseudoinverse</strong> is</p>
+    <p>$$A^+ = V \Sigma^+ U^\top,$$</p>
+    <p>where $\Sigma^+$ is obtained by transposing $\Sigma$ and replacing each non-zero $\sigma_i$ with $1/\sigma_i$. Zero singular values stay zero.</p>
+
+    <h3>What it solves</h3>
+    <ul>
+        <li><strong>Tall full-rank $A$:</strong> $A^+ \mathbf{b}$ is the least-squares solution to $A\mathbf{x} = \mathbf{b}$.</li>
+        <li><strong>Wide full-rank $A$:</strong> $A^+ \mathbf{b}$ is the minimum-norm solution among the affine space of solutions.</li>
+        <li><strong>Rank-deficient $A$ (any shape):</strong> $A^+ \mathbf{b}$ is the minimum-norm least-squares solution &mdash; a single, well-defined answer.</li>
+    </ul>
+
+    <p>The pseudoinverse is also the standard way to solve ridge regression in closed form; numerical stability of small singular values is exactly the issue ridge addresses (replacing $1/\sigma_i$ with $\sigma_i / (\sigma_i^2 + \lambda)$).</p>
+
+    <div class="callout">
+        <div class="callout-label">When to reach for SVD vs. eigendecomp</div>
+        <p>Use eigendecomp for square symmetric matrices (covariance, Hessian). Use SVD for everything else: rectangular weight matrices, Jacobians, data matrices, attention scores. SVD is strictly more general; for a symmetric PSD matrix the two coincide. Default to SVD unless you have a specific reason not to.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-11">
+    <div class="slide-number">11</div>
+    <h2>Cheat Sheet</h2>
+    <ul>
+        <li>Every matrix has an SVD: $A = U\Sigma V^\top$. $U, V$ orthogonal; $\Sigma$ "diagonal" with non-increasing non-negative singular values.</li>
+        <li>Geometric reading: <strong>rotate, scale per-axis, rotate</strong>. Spectral norm $\|A\|_2 = \sigma_1$; Frobenius norm $\|A\|_F = \sqrt{\sum \sigma_i^2}$.</li>
+        <li>Right singular vectors = eigenvectors of $A^\top A$; left = eigenvectors of $A A^\top$. Singular values = square roots of those eigenvalues.</li>
+        <li><strong>Eckart-Young:</strong> the truncated SVD $A_k$ is the best rank-$k$ approximation in Frobenius and spectral norm. Error is the trailing singular-value tail.</li>
+        <li>Real ML matrices have <strong>fast-decaying spectra</strong>; fine-tune <em>updates</em> are extreme low-rank (effective rank 8&ndash;32).</li>
+        <li><strong>LoRA:</strong> $\Delta W = BA$ with $A \in \mathbb{R}^{r \times d_{in}}$, $B \in \mathbb{R}^{d_{out} \times r}$, scaled by $\alpha/r$. ~100&times; param reduction, mergeable at inference.</li>
+        <li>QLoRA, DoRA, VeRA, PiSSA, LoRA+ are refinements that all sit on the same low-rank-correction foundation.</li>
+        <li><strong>DeepSeek MLA:</strong> low-rank latent on the <em>activation</em> path of K and V, cutting the KV cache by an order of magnitude.</li>
+        <li>Pseudoinverse $A^+ = V\Sigma^+ U^\top$ generalises the inverse to any shape; it solves least-squares, minimum-norm and rank-deficient systems uniformly.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Read next</div>
+        <p>Deck <strong>08 &mdash; Orthogonality, QR &amp; RoPE</strong> picks up where SVD's "rotations" left off: how to actually compute orthonormal bases, and why a particular family of 2&times;2 rotations &mdash; RoPE &mdash; has become standard for transformer position encoding.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Linear_Algebra">Linear Algebra for AI / ML</a> series. Sources: Eckart &amp; Young 1936; Mirsky 1960; Hu et al., "LoRA: Low-Rank Adaptation of Large Language Models", ICLR 2022; Aghajanyan et al., "Intrinsic Dimensionality Explains the Effectiveness of Language Model Fine-Tuning", ACL 2021; DeepSeek-AI, "DeepSeek-V2: A Strong, Economical, and Efficient Mixture-of-Experts Language Model", 2024 (MLA); Dettmers et al., "QLoRA: Efficient Finetuning of Quantized LLMs", NeurIPS 2023.</p>
+</footer>
+
+</body>
+</html>
